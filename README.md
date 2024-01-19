@@ -19,3 +19,11 @@ Within the **notebooks** folder, there are two files:
 
 The Rmd is R notebook which can be opened in R and the individual chunks can be run sequentially to reproduce the two figures from the article.
 The PDF file is the final knitted document with inline figures.
+
+Within the **data** folder, there are two files:
+
+- nonvoters_cookbook.pdf
+- nonvoters_data.csv
+
+The PDF file contains an explanation of all of the variables in the CSV file and the associated meaning of coded variable values.
+The CSV file contains the actual data used for reproduction and this is what is loaded in the R notebook.
