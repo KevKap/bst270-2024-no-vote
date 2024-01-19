@@ -190,7 +190,7 @@ fig2_data %>%
                                   labels = question_labels)) %>%
   na.omit() %>%
   ggplot(aes(x = voter_category, y = percentageYes, fill = voter_category)) +
-  # Matching colors from publisehd figure
+  # Matching colors from published figure
   scale_fill_manual(values = c("#AF4CFF", "#E183AF", "#FEC11A"),
                     breaks = c( "Rarely or Never Vote",
                                 "Sometimes Vote", "Almost Always Vote")) +
