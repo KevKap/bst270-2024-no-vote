@@ -54,7 +54,7 @@ fig1_data <- no_vote_data %>%
   dplyr::select(all_of(req_col))
 ```
 
-By looking in the codebook, we see that for Q33 (Party ID), a value of 1 corresponds to the republican party and 2 corresponds to the democratic party. However, we see below that are 2 other data value options: a missing value and a -1. -1 will be assumed to be the independent/neither category. *Missing data (in any category) will be dropped from figure generation.*
+By looking in the codebook, we see that for Q33 (Party ID), a value of 1 corresponds to the republican party and 2 corresponds to the democratic party. However, we see below that are 2 other data value options: a missing value and a -1. -1 will be assumed to be the independent/neither category. *Missing data (in any category) was removed.*
 
 ```{r}
 unique(fig1_data$Q33)
@@ -70,28 +70,37 @@ We also note that the ppage variable needs to be changed from a continuous varia
 Additionally, all of the categorical variables need to be factorized with the proper leveling such that we can obtain the same order as those in the published figure. Colors were extracted from the original figure using the Image Picker tool on the Coolors website (tool found [here](https://coolors.co/image-picker)).
 
 ```{r, message = FALSE}
+# Using rev to make leveling easier as coord_flip changes the orientation.
+# This way we can just write them the same order the appear in the final
+# figure.
 value_levels <- rev(c("Black", "Hispanic", "Other/Mixed", "White", "Less than $40k",
                   "$40-75k", "$75-125k", "$125k or more", "26-34", "35-49", "50-64",
                   "65+", "High school or less", "Some college", "College",
                   "Democratic", "Independent/Neither", "Republican"))
+
 fig1_data %>%
+  # Categorizing age
   dplyr::mutate(ppage = dplyr::case_when(
     (ppage >= 26) & (ppage <= 34) ~ "26-34",
     (ppage >= 35) & (ppage <= 49) ~ "35-49",
     (ppage >= 50) & (ppage <= 64) ~ "50-64",
     ppage >= 65 ~ "65+"
   )) %>%
+  # Changing party affiliation
   dplyr::mutate(Q33 = dplyr::case_when(
     Q33 == -1 ~ "Independent/Neither",
     Q33 == 1 ~ "Republican",
     Q33 == 2 ~ "Democratic"
   )) %>%
+  # Reformatting table for easier use with ggplot
   reshape2::melt(id.var = c("RespId", "voter_category")) %>%
   dplyr::mutate(value = factor(value,
                                levels = value_levels)) %>%
+  # Adjusting factors for individual plots
   dplyr::mutate(variable = factor(variable,
                                levels = c("race", "income_cat", "ppage", "educ", "Q33"),
                                labels = c("Race", "Income", "Age", "Education", "Party ID"))) %>%
+  # Adjusting factors for voting category
   dplyr::mutate(voter_category = factor(voter_category,
                                         levels = c("always", "sporadic", "rarely/never"),
                                         labels = c("Almost Always Vote",
@@ -99,11 +108,12 @@ fig1_data %>%
                                                    "Rarely or Never Vote"))) %>%
   na.omit() %>%
   ggplot(aes(x = value, fill = voter_category)) +
-  geom_bar(position = "fill") +
+  geom_bar(position = "fill", na.rm = TRUE) +
   coord_flip() +
-  facet_wrap(vars(variable), scales = "free") +
+  facet_wrap(vars(variable), scales = "free", drop = TRUE) +
   scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1),
                      labels = c("0%", "25", "50", "75", "100")) +
+  # Matching colors from published figure
   scale_fill_manual(values = c("#AF4CFF", "#E183AF", "#FEC11A"),
                     breaks = c( "Rarely or Never Vote",
                                 "Sometimes Vote", "Almost Always Vote")) +
@@ -113,6 +123,7 @@ fig1_data %>%
         legend.title = element_blank(),
         axis.title.x = element_blank())
 ```
+\clearpage
 
 ## Figure 2 Generation
 
@@ -135,9 +146,72 @@ We will additionally need all Q18_X columns, where X is a number 1-10. The mappi
 10. Did not receive absentee or mail-in ballot in time
 
 ```{r}
+req_col_2 <- c("RespId", "voter_category", paste0("Q18_", 1:10))
 
+fig2_data <- no_vote_data %>%
+  dplyr::select(all_of(req_col_2))
 ```
 
+Using the codebook, we see that for all of the Q18 data values, a 1 corresponds to "Yes" and a 2 corresponds to "No".
+In the published figure, the reported values are the percentages of respondents who faced the obstacle (which would be a response of "Yes" to the question).
+
+Additonally, the questions need to be reordered to match the same order as the figure.
+
+```{r}
+question_levels <- c("Q18_8", "Q18_3", "Q18_7", "Q18_2", "Q18_4",
+                     "Q18_10","Q18_9", "Q18_1", "Q18_6", "Q18_5")
+question_labels <- c("Waited in line to vote for\nmore than an hour",
+                     "Missed voter registration\ndeadline",
+                     "Couldn't get off\nwork to vote",
+                     "Couldn't find their\npolling place",
+                     "Couldn't physical access\ntheir polling place",
+                     "Didn't receive absentee\nballot in time to vote",
+                     "Was told tehir name wasn't\non registered voter list",
+                     "Was told they didn't have\ncorrect identification",
+                     "Had to cast a\nprovisional ballot",
+                     "Couldn't get necessary\nhelp to fill out ballot")
+  
+fig2_data %>%
+  reshape2::melt(id.var = c("RespId", "voter_category")) %>%
+  # Need to calculate percentage of responsdents per group with a Yes (value of 1)
+  dplyr::group_by(voter_category, variable) %>%
+  dplyr::mutate(percentageYes = sum(value == 1)/n()) %>%
+  # Can safely discard No responses now and don't need individual level data
+  dplyr::filter(value == 1) %>%
+  dplyr::select(-c("RespId")) %>%
+  unique() %>% # Collapsing down for gropu level
+  dplyr::mutate(voter_category = factor(voter_category,
+                                        levels = c("rarely/never", "sporadic", "always"),
+                                        labels = c("Rarely or Never Vote",
+                                                   "Sometimes Vote",
+                                                   "Almost Always Vote"))) %>%
+  dplyr::mutate(variable = factor(variable,
+                                  levels = question_levels,
+                                  labels = question_labels)) %>%
+  na.omit() %>%
+  ggplot(aes(x = voter_category, y = percentageYes, fill = voter_category)) +
+  # Matching colors from publisehd figure
+  scale_fill_manual(values = c("#AF4CFF", "#E183AF", "#FEC11A"),
+                    breaks = c( "Rarely or Never Vote",
+                                "Sometimes Vote", "Almost Always Vote")) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(breaks = c(0, 0.05, 0.1, 0.15, 0.2),
+                     labels = c("0", "5", "10", "15", "20%")) +
+  facet_wrap(vars(variable), ncol = 5) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank(),
+        legend.position = "top",
+        legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.text.x = element_blank(),
+        strip.text = element_text(size = 6))
+```
+
+## Conclusion
+
+Overall the figures were reproducible with the provided data. There appear to be some minor discrepancies in the percentage values for Figure 1. I believe this is due to the way in which missing values for handled (I dropped rows with missing values), whereas they may have had some other procedure for handling them. Even with these differences, the trends are all identical and thus the analysis (for these two figures) was reproducible in my hands.
 
 ## sessionInfo
 
